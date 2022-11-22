@@ -2,16 +2,29 @@ import sys
 
 import openpyxl
 from PySide2 import QtCore, QtGui, QtWidgets
-from PySide2.QtCore import Qt
+from PySide2.QtCore import Qt, QSize
+from PySide2.QtGui import QPixmap, QPainter, QIcon
 from PySide2.QtWidgets import QHBoxLayout, QPushButton, QMainWindow, QApplication, QVBoxLayout, QWidget, QFileDialog, \
-    QSpinBox, QLabel, QMessageBox, QListWidget, QComboBox
+    QSpinBox, QLabel, QMessageBox, QListWidget, QComboBox, QToolBar, QAction, QAbstractButton
 from PySide2.examples.widgets.itemviews.addressbook.tablemodel import TableModel
+
+class PicButton(QAbstractButton):
+    def __init__(self, pixmap, parent=None):
+        super(PicButton, self).__init__(parent)
+        self.pixmap = pixmap
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.drawPixmap(event.rect(), self.pixmap)
+
+    def sizeHint(self):
+        return QSize(10, 50)
 
 class TableModel(QtCore.QAbstractTableModel):
     def __init__(self, data):
         super().__init__()
-        self._data = data
-
+        self._data = data  # worksheet
+        #self.filter = filter
     def flags(self, index):
         return Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsEditable
 
@@ -47,17 +60,32 @@ class MainWindow(QMainWindow):
         self.book = None
         self.sheet = None
 
-        self.open_button = QPushButton("Open")
-        self.open_button.setStatusTip("Open from computer")
-        self.open_button.clicked.connect(self.open_button_clicked)
+        self.mainToolbar = QToolBar("Main toolbar")
+        self.addToolBar(self.mainToolbar)
 
-        self.save_button = QPushButton("Save")
-        self.save_button.setStatusTip("Save document")
-        self.save_button.clicked.connect(self.save_button_clicked)
+        self.open_action = QAction("Open")
+        self.open_action.setStatusTip("Open from computer")
+        self.open_action.triggered.connect(self.open_button_clicked)
 
-        self.close_button = QPushButton("Close")
-        self.close_button.setStatusTip("Close current document")
-        self.close_button.clicked.connect(self.close_button_clicked)
+        self.save_action = QAction("Save")
+        self.save_action.setStatusTip("Save document")
+        self.save_action.triggered.connect(self.save_button_clicked)
+
+        self.close_action = QAction("Close")
+        self.close_action.setStatusTip("Close current document")
+        self.close_action.triggered.connect(self.close_button_clicked)
+
+        self.filter_action = QAction("Filters")
+        self.filter_action.setStatusTip("Set some filters over your data")
+        self.filter_action.triggered.connect(self.filter_button_clicked)
+
+        self.mainToolbar.addAction(self.open_action)
+        self.mainToolbar.addSeparator()
+        self.mainToolbar.addAction(self.save_action)
+        self.mainToolbar.addSeparator()
+        self.mainToolbar.addAction(self.close_action)
+        self.mainToolbar.addSeparator()
+        self.mainToolbar.addAction(self.filter_action)
 
         self.sheetCount = QVBoxLayout()
         self.sheetCountLabel = QLabel("Worksheet")
@@ -66,21 +94,39 @@ class MainWindow(QMainWindow):
         self.sheetCount.addWidget(self.sheetCountLabel)
         self.sheetCount.addWidget(self.sheetListBox)
 
+        self.fontChanger = QComboBox()
+        self.fontChanger.addItems(["Calibri", "Arial", "Times New Roman"])
+
+        self.fontSize = QSpinBox()
+        self.fontSize.setMinimum(6)
+        self.fontSize.setMaximum(20)
+
+        #self.boldLetter = PicButton(QPixmap("boldLetter.png"))
+        self.boldLetter = QPushButton()
+        self.boldLetter.setIcon(QIcon("boldLetter.png"))
+
+        self.curseLetter = QPushButton()
+        self.curseLetter.setIcon(QIcon("cursevLetter.png"))
+
         self.hLayout = QHBoxLayout()
-        self.hLayout.addWidget(self.open_button)
-        self.hLayout.addWidget(self.save_button)
-        self.hLayout.addWidget(self.close_button)
+        self.hLayout.addWidget(self.fontChanger)
+        self.hLayout.addWidget(self.fontSize)
+        self.hLayout.addWidget(self.boldLetter)
+        self.hLayout.addWidget(self.curseLetter)
         self.hLayout.addLayout(self.sheetCount)
 
         self.vLayout = QVBoxLayout()
         self.vLayout.addLayout(self.hLayout)
 
         self.table = QtWidgets.QTableView()
+        #
         self.vLayout.addWidget(self.table)
 
         self.widget = QWidget()
         self.widget.setLayout(self.vLayout)
         self.setCentralWidget(self.widget)
+
+
 
     def open_button_clicked(self):
         self.file_name = QFileDialog.getOpenFileName(self)
@@ -137,6 +183,11 @@ class MainWindow(QMainWindow):
 
         self.book.close()
 
+    def filter_button_clicked(self):
+        self.w = QBoxWindow()
+        self.w.show()
+        #self.table.model().filter =
+
     def sheetListBox_text_changed(self, str):
         try:
             self.sheet = self.book[str]
@@ -147,6 +198,13 @@ class MainWindow(QMainWindow):
         except KeyError:
             o = 1
 
+class QBoxWindow(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Filters")
+        self.setGeometry(500, 400, 300, 300)
+
+        self.label = QLabel("Filters")
 
 app = QApplication(sys.argv)
 window = MainWindow()
