@@ -1,13 +1,15 @@
 import sys
 from copy import copy
+import os
 
 import openpyxl
 from openpyxl.styles import Font
 from PySide2 import QtCore, QtGui, QtWidgets
 from PySide2.QtCore import Qt, QSize
 from PySide2.QtGui import QPixmap, QPainter, QIcon, QFont
-from PySide2.QtWidgets import QHBoxLayout, QPushButton, QMainWindow, QApplication, QVBoxLayout, QWidget, QFileDialog, \
-    QSpinBox, QLabel, QMessageBox, QListWidget, QComboBox, QToolBar, QAction, QAbstractButton
+from PySide2.QtWidgets import QTreeWidget, QHBoxLayout, QPushButton, QMainWindow, QApplication, QVBoxLayout, QWidget, \
+    QFileDialog, \
+    QSpinBox, QLabel, QMessageBox, QListWidget, QComboBox, QToolBar, QAction, QAbstractButton, QTreeWidgetItem
 from PySide2.examples.widgets.itemviews.addressbook.tablemodel import TableModel
 
 
@@ -28,7 +30,7 @@ class TableModel(QtCore.QAbstractTableModel):
     def __init__(self, data):  # конструктор класса
         super().__init__()  # наследование от класса - родителя
         self._ws = data  # переменной self._ws передаём "выбранный лист" из нашей таблицы
-        #self.filter = _filter  # передаём словарь, в котором указаны выставленные на панели
+        # self.filter = _filter  # передаём словарь, в котором указаны выставленные на панели
         # значения название шрифта, размер, курсив и жирность
 
     def flags(self, index):  # определение флагов для каждой ячейки в текущий момент
@@ -46,7 +48,7 @@ class TableModel(QtCore.QAbstractTableModel):
             # _fontItalic = self._ws[index.row() + 1][index.column()].font.i  # возвращает флаг курсив: true - курсив
             # # _fontSize = self._ws[index.row() + 1][index.column()].font.size
             # font = QFont(_fontName, _fontItalic)  # создаём переменную класса Font c нашими параметрами
-            #if _fontBold:
+            # if _fontBold:
             #    font.setBold(True)  # устанавливаем параметр жирности в True, если текст в заданной ячейке жирный
             font = QFont()
             cell = self.getCell(index)
@@ -77,10 +79,11 @@ class TableModel(QtCore.QAbstractTableModel):
     def getCell(self, index):
         return self._ws.cell(index.row() + 1, index.column() + 1)
 
+
 class MainWindow(QMainWindow):  # класс главного окна
     def __init__(self):  # конструктор главного окна
         super().__init__()  # наследование от класса - родителя (в нашем случае от QMainWindow)
-
+        self.fileTreeFlag = None
         self.setWindowTitle("Excel Opener V Sashka")  # устанавливаем название окна
         self.setGeometry(300, 300, 800, 400)  # устанавливаем размеры начального окна
 
@@ -153,28 +156,25 @@ class MainWindow(QMainWindow):  # класс главного окна
         self.hLayout.addWidget(self.italicLetter)  # добаляем виджет
         self.hLayout.addLayout(self.sheetCount)  # добаляем виджет
 
+        self.mainHLayout = QHBoxLayout()  # головной виджет горизонатльного расположения
+
         self.vLayout = QVBoxLayout()  # создаём головной виджет вертикального расположения
         self.vLayout.addLayout(self.hLayout)  # добавляем туда наше "меню" для редактирования
 
         self.table = QtWidgets.QTableView()  # создаём виджет-отображение таблицы
         self.vLayout.addWidget(self.table)  # добавляем в головной виджет
 
+        self.mainHLayout.addLayout(self.vLayout)
+
         self.widget = QWidget()  # создаём виджет для отображения
-        self.widget.setLayout(self.vLayout)  # вставляем в наш виджет, головной виджет вертикального расположения
+        self.widget.setLayout(self.mainHLayout)  # вставляем в наш виджет, головной виджет вертикального расположения
         self.setCentralWidget(self.widget)  # выставляем виджет на передний план
 
     def open_button_clicked(self):  # нажатие кнопки "Open"
-        current_file_name = QFileDialog.getOpenFileName(self)  # получаем название файла после выборки
-        if current_file_name[0] != "":
-            if self.book is not None:  # если у нас открыта таблица в Excel0
-                self.book.close()  # то закрываем её
-            self.sheet = None  # "удаляем" текущий лист
-            self.sheetListBox.clear()  # очищаем виджет с названием листов таблицы
-            self.table.setModel(None)  # "удаляем" текущую модель
-            self.file_name = current_file_name[0]
-            if self.file_name[-5:] == ".xlsx" or self.file_name[-4:] == ".xls":  # проверяем расширение файла
-                self.book = openpyxl.load_workbook(self.file_name)  # загружаем текущую таблицу
-                self.sheetListBox.addItems(self.book.sheetnames)  # добавляем названия листов таблицы
+        currentDirectory = QFileDialog.getExistingDirectory(self)
+        #if not self.fileTreeFlag:
+        current_file_name = self.createFileTree(currentDirectory)
+        # current_file_name = QFileDialog.getOpenFileName(self)  # получаем название файла после выборки
 
     def close_button_clicked(self):  # нажатие кнопки "Close"
         qMessage = QMessageBox()  # создаём диалоговой окно с вопросов: "Вы уверены, что хотите закрыть файл?"
@@ -253,6 +253,73 @@ class MainWindow(QMainWindow):  # класс главного окна
             newFont.sz = i
             cell.font = newFont
             self.model.dataChanged.emit(index, index)
+
+    def createFileTree(self, currentDirectoryPath):
+        if not self.fileTreeFlag:
+            self.fileTree = QTreeWidget()
+        else:
+            self.fileTreeFlag = True
+        self.root = QTreeWidgetItem(self.fileTree, [currentDirectoryPath])
+        self.fileTreeFlag = True
+        self.fileTree.setGeometry(0, 0, 100, 100)
+        self.fileTree.setHeaderLabel("Directory")
+        self.fileTree.clicked.connect(self.treeItemClicked)
+        self.fileTree.doubleClicked.connect(self.fileTreeItemDoubleClicked)
+        # model = QtWidgets.QFileSystemModel()
+        # model.setRootPath((QtCore.QDir.rootPath()))
+        # self.fileTree.setModel(model)
+        # https://www.youtube.com/watch?v=4PkPezdpO90
+
+        self.mainHLayout.addWidget(self.fileTree)
+
+    def treeItemClicked(self):
+        item = self.fileTree.currentItem()
+        itemNames = list(map(lambda name: name.text(0), item.takeChildren()))
+        itemPath = self.getAllPath(item)
+        if os.path.isdir(itemPath):
+            for entry in os.listdir(itemPath):
+                tree_item = QTreeWidgetItem(item, [entry])
+                if os.path.isdir(os.path.join(itemPath, entry)):
+                    tree_item.setIcon(0, QIcon("folder.png"))
+                else:
+                    try:
+                        format = entry[entry.rindex("."):]
+                    except Exception:
+                        pass
+                    else:
+                        tree_item.setIcon(0, self.getIcon(format))
+        else:
+            if os.path.isfile(itemPath):
+                pass
+
+    def fileTreeItemDoubleClicked(self):
+        item = self.fileTree.currentItem()
+        if item.text(0) != "":
+            if self.book is not None:  # если у нас открыта таблица в Excel0
+                self.book.close()  # то закрываем её
+            self.sheet = None  # "удаляем" текущий лист
+            self.sheetListBox.clear()  # очищаем виджет с названием листов таблицы
+            self.table.setModel(None)  # "удаляем" текущую модель
+            self.file_name = item.text(0)
+            if self.file_name[-5:] == ".xlsx" or self.file_name[-4:] == ".xls":  # проверяем расширение файла
+                self.book = openpyxl.load_workbook(self.file_name)  # загружаем текущую таблицу
+                self.sheetListBox.addItems(self.book.sheetnames)  # добавляем названия листов таблицы
+
+    def getAllPath(self, item):
+        path = item.text(0)
+        while item.parent() is not None:
+            path = item.parent().text(0) + "/" + path
+            item = item.parent()
+        return path
+
+    def getIcon(self, type):
+        if type == ".xlsx" or type == ".xls":
+            return QIcon("excel_icon.jpg")
+        elif type == ".png":
+            return QIcon("png_icon.png")
+        else:
+            return QIcon("unknown_icon.png")
+
 
 class QBoxWindow(QMainWindow):
     def __init__(self):
